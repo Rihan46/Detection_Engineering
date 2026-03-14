@@ -135,7 +135,6 @@ This project can assist with:
 Planned enhancements include:
 
 * MITRE ATT&CK mapping
-* Sigma rule generation
 * Detection rule deduplication
 * False positive guidance
 * Multi-SIEM rule support
