@@ -151,6 +151,6 @@ They should be **reviewed and validated by detection engineers** before deployme
 
 ## 🎥 Demo
 
-[![Watch the Demo](assets/demo-thumbnail.png)](workflow/workflow_demo.mp4)
+[Watch the workflow demo](workflow/workflow_demo.mp4)
 
 MIT License
