@@ -1,0 +1,309 @@
+{
+  "name": "Detection Engineering",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        16
+      ],
+      "id": "83099793-7f64-4320-9794-6be37b154dc6",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a Detection Engineer.\n\nRead the following threat report and generate possible detection rules in Elastic SIEM format.\n\nReport URL:\n{{ $json.link }}\n\nReturn ONLY valid JSON. Do NOT wrap the output in markdown code blocks.\n\nJSON format:\n\n{\n\"rules\": [\n{\n\"rule_name\": \"\",\n\"rule_description\": \"\",\n\"rule_logic\": \"\"\n\"reference\":{{ $json.link }}\n}\n]\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        608,
+        16
+      ],
+      "id": "e0dfe7a2-fc00-4a5d-a8eb-e34e5d8bb3bd",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "oik9ikR7bhIupWHd",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        400,
+        16
+      ],
+      "id": "13b5af47-4075-4d2c-b9b0-13021e83b5fb",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = [];\n\nfor (const item of $input.all()) {\n\n  let text = item.json.content.parts[0].text;\n\n  // remove markdown fences\n  text = text.replace(/```[\\s\\S]*?json/g, '').replace(/```/g, '').trim();\n\n  const data = JSON.parse(text);\n\n  for (const rule of data.rules) {\n    output.push({ json: rule });\n  }\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        16
+      ],
+      "id": "d1d3bea9-f014-4a3e-ad22-f983d0d4847b",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "html",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        16
+      ],
+      "id": "3912f62c-c1dc-48ba-ab64-de554afc3fd1",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "sendTo": "rihanmujahid46@gmail.com",
+        "subject": "Detection Report",
+        "message": "Detection Report for this week",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1280,
+        16
+      ],
+      "id": "998551ad-5b04-4b78-b0c2-9d6668301b63",
+      "name": "Send a message",
+      "webhookId": "5f44a70f-c5dc-47fa-a0e9-a8ca013b37fe",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "je8J6I7KfGEa6HEW",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        512,
+        144
+      ],
+      "id": "5bcbbe83-31d2-4c25-a53e-a5211c329e24",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "url": "https://unit42.paloaltonetworks.com/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -64,
+        16
+      ],
+      "id": "f718c920-97d2-4681-b24d-6b2364a0116c",
+      "name": "Unit42"
+    },
+    {
+      "parameters": {
+        "url": "https://thedfirreport.com/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -64,
+        224
+      ],
+      "id": "02b6fb5f-7b5b-4852-9dfb-88231ae90ae9",
+      "name": "dfir report"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);\n\nreturn items.filter(item => {\n  const pubDate = new Date(item.json.pubDate);\n  return pubDate >= sevenDaysAgo;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        16
+      ],
+      "id": "19689f8d-4c69-4f19-9d47-cd2ef90efcab",
+      "name": "Post published less than 7 days"
+    },
+    {
+      "parameters": {
+        "jsCode": "const oneMonthAgo = new Date();\noneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);\n\nreturn items.filter(item => {\n  const pubDate = new Date(item.json.pubDate);\n  return pubDate >= oneMonthAgo;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        224
+      ],
+      "id": "3d3cf4b4-9e8f-4b65-a998-557ae04a5c31",
+      "name": "Post published less than 30 days"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Unit42",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "dfir report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unit42": {
+      "main": [
+        [
+          {
+            "node": "Post published less than 7 days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "dfir report": {
+      "main": [
+        [
+          {
+            "node": "Post published less than 30 days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post published less than 7 days": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post published less than 30 days": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a906c263-60f8-4abc-9306-8a66c5a2e400",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3eea32ad9691f3b8917a5d419285a5fd6382812567796eec9fd883af2becf786"
+  },
+  "id": "boIG1nwnC9G2NJWE",
+  "tags": []
+}
