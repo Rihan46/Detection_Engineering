@@ -1,157 +1,123 @@
-# Threat Report → Elastic Detection Rule Generator
+# Automated SIEM Detection Engineering Platform
 
-## Overview
-
-This project automates the generation of **Elastic SIEM detection rules** from public threat intelligence and DFIR reports.
-
-The workflow collects threat reports from RSS feeds, analyzes them using a Large Language Model (LLM), and produces structured detection rules in **Elastic query format**.
-
-The goal of this project is to help **Detection Engineers and SOC teams** quickly convert threat intelligence into actionable detection logic.
+An end-to-end automated platform that monitors threat intelligence RSS feeds, extracts detection rules using DeepSeek V3/V4, performs semantic deduplication using Google's Gemini embeddings, and renders a fully interactive HTML5 dashboard along with a CSV report.
 
 ---
 
-## Key Features
+## 🚀 Key Features
 
-* Automated ingestion of threat intelligence reports
-* LLM-based extraction of attacker techniques
-* Automatic generation of Elastic SIEM detection rules
-* Structured JSON output for automation pipelines
-* Support for multiple RSS feeds
-
----
-
-## Data Sources
-
-The workflow currently processes threat reports from:
-
-* Unit42 Threat Intelligence
-* The DFIR Report
-
-These sources provide detailed attack analysis, adversary techniques, and forensic investigations. More feeds will be added in comming days
+* **Real-time Threat Intel Monitoring**: Periodically scans RSS feeds from leading sources (Unit 42, Red Canary, Mandiant, CISA, DFIR Radar, and The DFIR Report) looking for articles published in the last 7 days.
+* **Standardized Elastic ECS Rule Generation**: Automatically generates Kibana Query Language (KQL) detection rules mapping to standard Elastic Common Schema (ECS) fields.
+* **Semantic Deduplication**: Uses Google's free Gemini Embedding API (`models/gemini-embedding-2`) to compute 3072-dimensional semantic vectors. Uses pure-Python cosine similarity checks at a `0.95` threshold to discard rules with similar detection ideas, preventing rule fatigue.
+* **Strict Detection Exclusions**:
+  * **No UEBA**: Excludes anomaly detection/User Behavior Analytics.
+  * **No Native Cloud**: Excludes AWS CloudTrail, Azure Activity, Google Workspace, SharePoint/Exchange, iManage, CyberArk, etc.
+  * **Windows & Linux Focus**: Focuses solely on endpoint-centric log sources (processes, commands, file events, registry, local network). Excludes macOS, iOS, and Android.
+  * **No Static IP-only Rules**: Programmatically and prompt-level enforces that any rules referencing IP addresses must be combined with another parameter (ports, process name, event code, etc.). Static IP-only rules are automatically skipped.
+* **Dynamic Interactive Dashboard**: Includes a beautifully styled dark-mode report with color-coded severity badges, status checklist tracking (To Do, In Progress, Done, N/A) backed by local storage, search functionality, and real-time statistics counters.
+* **Dual-Format CSV Export**:
+  * Automatically outputs all rules to a consolidated `rules.csv` file on run.
+  * Provides an **Export Filtered to CSV** button on the HTML dashboard to download the exact filtered ruleset directly in the browser.
 
 ---
 
-## Architecture
+## ⚙️ How It Works (End-to-End Workflow)
 
-The detection rule generation pipeline works as follows:
-
-```
-Threat Intelligence RSS Feeds
-          │
-          ▼
-   n8n Workflow Engine
-          │
-          ▼
-  LLM Analysis (Gemini)
-          │
-          ▼
- Detection Rule Generation
-          │
-          ▼
- Structured JSON Parsing
-          │
-          ▼
- Detection Rule Output
+```mermaid
+graph TD
+    A[Fetch RSS Feeds] -->|Last 7 Days Filter| B(Deduplicate Articles by Link & Title)
+    B -->|New Articles| C(Generate Rules via DeepSeek API)
+    C -->|Extract Rules JSON| D{Verify IP-Only Rule?}
+    D -->|IP-Only| E[Discard Rule]
+    D -->|Valid Rule| F[Fetch Gemini Embedding]
+    F --> G{Compare with History via Cosine Similarity}
+    G -->|Similarity >= 0.95| H[Discard Duplicate]
+    G -->|Similarity < 0.95| I[Append to Database]
+    I --> J[Save to processed_rules.json]
+    J --> K[Generate report.html & rules.csv]
 ```
 
----
-
-## Workflow Steps
-
-1. RSS feeds are ingested from threat intelligence sources.
-2. Reports published within the configured time window are selected.
-3. The report URL is sent to the LLM.
-4. The LLM analyzes the report and extracts potential detection opportunities.
-5. Detection rules are generated in **Elastic SIEM query format**.
-6. The output is returned as structured JSON.
-7. The rules are parsed and stored for further use.
+1. **Feed Fetching**: The script pulls recent articles (last 7 days) and compares their links and titles against historical logs in `processed_rules.json`.
+2. **AI Rule Extraction**: New articles are sent to the DeepSeek API. The model evaluates the report IOCs/tactics and outputs structured JSON containing rule parameters (Rule Name, KQL Condition, Severity, MITRE ATT&CK Technique, Target Process, and Description).
+3. **Programmatic Validation**: The script passes the KQL condition through `is_ip_only_rule()` to verify it doesn't target an IP address in isolation.
+4. **Semantic Embedding Analysis**:
+   * If a rule is valid, it retrieves a 3072-dimensional vector representation of the rule using the Gemini API.
+   * It calculates the cosine similarity between the new vector and existing rules in the database. If it exceeds `0.95`, the rule is discarded.
+5. **Report Compilation**: The script compiles the final dashboard (`report.html`) using Jinja2 and writes the CSV database (`rules.csv`).
 
 ---
 
-## Detection Rule Format
+## 📋 Requirements
 
-Generated rules follow this JSON structure:
+* **Python**: Version `3.10` or higher.
+* **Dependencies**: Listed in `requirements.txt`:
+  * `feedparser==6.0.11` (RSS parsing)
+  * `openai>=1.0.0` (DeepSeek interaction)
+  * `jinja2==3.1.4` (HTML template rendering)
+  * `google-generativeai>=0.8.0` (Gemini embeddings)
+* **API Keys**:
+  * **DeepSeek API Key**: A valid key to call the DeepSeek V3/V4 chat completions endpoints.
+  * **Gemini API Key**: A valid key to generate embeddings (runs on Google AI Studio's free tier).
 
-```json
-{
-  "rules": [
-    {
-      "rule_name": "Example Rule",
-      "rule_description": "Detects suspicious activity related to attacker behavior.",
-      "rule_logic": "process.name: suspicious.exe AND event.category: process"
-    }
-  ]
-}
+---
+
+## 🛠️ Installation & Setup
+
+### 1. Clone the Workspace
+Make sure your terminal is inside the project directory:
+```powershell
+cd c:\Users\dfir\Desktop\Ai_Projects\Detection_Engg
 ```
 
-Each rule contains:
+### 2. Create and Activate Virtual Environment
+```powershell
+# Create venv
+python -m venv .venv
 
-| Field            | Description                           |
-| ---------------- | ------------------------------------- |
-| rule_name        | Name of the detection rule            |
-| rule_description | Description of the detection logic    |
-| rule_logic       | Elastic SIEM query used for detection |
-
----
-
-## Example Output
-
+# Activate venv
+.venv\Scripts\Activate.ps1
 ```
-Rule name: Handala Hack Wiper - Shadow Copy Deletion
 
-Rule Description:
-Detects execution of vssadmin deleting shadow copies, a common anti-forensic technique used by wiper malware.
+### 3. Install Dependencies
+```powershell
+pip install -r requirements.txt
+```
 
-Rule Logic:
-host.os.type: "windows" AND process.name: "vssadmin.exe" AND process.command_line: "*delete shadows*"
+### 4. Configure API Keys
+The script loads the Gemini API key from the environment variable `GEMINI_API_KEY` (with a hardcoded fallback inside the script config block) and the DeepSeek API key from `DEEPSEEK_API_KEY` inside `generate_rules.py`:
+```python
+# --- Configuration ---
+DEEPSEEK_API_KEY = "sk-...." # Replace with your DeepSeek Key
+GEMINI_API_KEY = "AIQ..."      # Replace with your Gemini Key
 ```
 
 ---
 
----
+## 💻 Usage
 
-## Requirements
+Run the script using the virtual environment Python interpreter:
+```powershell
+.venv\Scripts\python.exe generate_rules.py
+```
 
-* n8n workflow automation
-* Gemini API access
-* RSS feeds from threat intelligence sources
-
----
-
-## Use Cases
-
-This project can assist with:
-
-* Detection engineering
-* Threat intelligence operationalization
-* Automated rule generation
-* Security research
-* SOC detection improvement
+### Script Outputs
+* **`report.html`**: The interactive dark-mode HTML dashboard.
+* **`rules.csv`**: A CSV database containing four key columns:
+  1. `Source`
+  2. `Rule Name`
+  3. `Description`
+  4. `Logic` (KQL query)
+* **`processed_rules.json`**: The persistent local state store database keeping track of processed articles and generated rule embeddings.
 
 ---
 
-## Future Improvements
+## 📊 Dashboard Controls & Customization
 
-Planned enhancements include:
-
-* MITRE ATT&CK mapping
-* Detection rule deduplication
-* False positive guidance
-* Multi-SIEM rule support
-
----
-
-## Disclaimer
-
-The detection rules generated by this system are automatically created using an LLM.
-They should be **reviewed and validated by detection engineers** before deployment in production environments.
-
----
-
-## 🎥 Demo
-
-[Watch the workflow demo](workflow/workflow_demo.mp4)
-
-[Sample output](workflow/Sample_output.png)
-
-MIT License
+Open `report.html` in any web browser to view the dynamic dashboard:
+1. **Interactive Filters**:
+   * **Source Filter**: View rules originating from a specific vendor.
+   * **Status Filter**: Track your deployment status (To Do, In Progress, Done, N/A). Statuses are persistently stored in your browser's LocalStorage.
+   * **Severity Filter**: View rules based on risk levels (Critical, High, Medium, Low).
+   * **Search Box**: Perform case-insensitive full-text keyword searches across names, descriptions, and KQL code.
+2. **Dynamic Counter Updates**: The stats cards at the top (**Rules by Source** and **Rules by Severity**) recalculate in real-time to match the visible rules matching your filters.
+3. **Export Filtered to CSV**: Click the **Export Filtered to CSV** button to download a spreadsheet containing only the rules currently matching your active filter criteria.
